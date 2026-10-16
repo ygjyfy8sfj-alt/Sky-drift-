@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Sky Drift - Upgraded Edition</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --accent: #00f2fe;
+    --text: #ffffff;
+  }
+  * {
+    box-sizing: border-box;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  body, html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    overflow: hidden;
+  }
+  #gameCanvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to bottom, #0f2027, #203a43, #2c5364);
+    cursor: pointer;
+  }
+  #hud {
+    position: fixed;
+    top: 20px;
+    left: 24px;
+    right: 24px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    pointer-events: none;
+    z-index: 10;
+  }
+  .score-board {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+  }
+  .hint {
+    font-size: 13px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.6);
+  }
+  #overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: rgba(11, 12, 16, 0.85);
+    z-index: 20;
+    backdrop-filter: blur(5px);
+    transition: opacity 0.3s ease;
+  }
+  h1 {
+    font-size: 3rem;
+    margin: 0 0 10px 0;
+    background: linear-gradient(45deg, #00f2fe, #4facfe);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  p {
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 30px;
+    font-size: 15px;
+  }
+  button {
+    background: linear-gradient(135deg, #00f2fe, #4facfe);
+    border: none;
+    color: #0b0c10;
+    padding: 14px 36px;
+    border-radius: 999px;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    box-shadow: 0 4px 20px rgba(0, 242, 254, 0.4);
+    transition: transform 0.1s ease, box-shadow 0.1s ease;
+  }
+  button:hover {
+    transform: scale(1.05);
+    box-shadow: 0 6px 25px rgba(0, 242, 254, 0.6);
+  }
+</style>
+</head>
+<body>
+
+<div id="hud">
+  <div class="score-board">SCORE: <span id="score">0</span></div>
+  <div class="hint">Tap or Space to Climb</div>
+</div>
+
+<div id="overlay">
+  <h1>Sky Drift</h1>
+  <p>Smooth controls &amp; progressive difficulty</p>
+  <button id="start-btn">Take Flight</button>
+</div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let width = window.innerWidth;
+let height = window.innerHeight;
+canvas.width = width;
+canvas.height = height;
+
+window.addEventListener('resize', () => {
+  width = window.innerWidth;
+  height = window.innerHeight;
+  canvas.width = width;
+  canvas.height = height;
+});
+
+let gameState = 'START';
+let score = 0;
+let baseSpeed = 3.2;
+
+const plane = {
+  x: 100,
+  y: height / 2,
+  w: 50,
+  h: 26,
+  vy: 0,
+  gravity: 0.30,
+  lift: -6.4
+};
+
+let obstacles = [];
+let stars = [];
+let particles = [];
+let cloudsBg = [];
+
+for (let i = 0; i < 8; i++) {
+  cloudsBg.push({
+    x: Math.random() * width,
+    y: Math.random() * height,
+    w: 80 + Math.random() * 120,
+    speed: 0.8 + Math.random() * 1.0
+  });
+}
+
+function resetGame() {
+  score = 0;
+  plane.y = height / 2;
+  plane.vy = 0;
+  obstacles = [];
+  stars = [];
+  particles = [];
+  document.getElementById('score').textContent = score;
+}
+
+function triggerLift() {
+  if (gameState === 'PLAYING') {
+    plane.vy = plane.lift;
+    for (let i = 0; i < 5; i++) {
+      particles.push({
+        x: plane.x,
+        y: plane.y + plane.h / 2,
+        vx: -2.5 - Math.random() * 2,
+        vy: (Math.random() - 0.5) * 2,
+        r: 3 + Math.random() * 3,
+        alpha: 0.8
+      });
+    }
+  }
+}
+
+window.addEventListener('keydown', e => {
+  if (e.code === 'Space') {
+    e.preventDefault();
+    triggerLift();
+  }
+});
+
+canvas.addEventListener('pointerdown', () => {
+  triggerLift();
+});
+
+const startBtn = document.getElementById('start-btn');
+const overlay = document.getElementById('overlay');
+
+startBtn.addEventListener('click', () => {
+  resetGame();
+  gameState = 'PLAYING';
+  overlay.style.opacity = '0';
+  setTimeout(() => overlay.style.display = 'none', 300);
+});
+
+let spawnTimer = 0;
+
+function update() {
+  if (gameState !== 'PLAYING') return;
+
+  let currentSpeed = baseSpeed + Math.floor(score / 200) * 0.4;
+
+  plane.vy += plane.gravity;
+  plane.y += plane.vy;
+
+  if (plane.y > height - 40 || plane.y < 20) {
+    gameOver();
+  }
+
+  cloudsBg.forEach(c => {
+    c.x -= c.speed;
+    if (c.x < -200) c.x = width + 200;
+  });
+
+  particles.forEach(p => {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.alpha -= 0.025;
+  });
+  particles = particles.filter(p => p.alpha > 0);
+
+  spawnTimer++;
+  if (spawnTimer > Math.max(70, 110 - Math.floor(score / 50))) {
+    spawnTimer = 0;
+    const gap = 200;
+    const maxObstacleHeight = height - gap - 140;
+    const topH = Math.floor(Math.random() * maxObstacleHeight) + 50;
+
+    obstacles.push({
+      x: width,
+      y: 0,
+      w: 65,
+      h: topH
+    });
+
+    obstacles.push({
+      x: width,
+      y: topH + gap,
+      w: 65,
+      h: height - (topH + gap)
+    });
+
+    if (Math.random() > 0.25) {
+      stars.push({
+        x: width + 30,
+        y: topH + gap / 2,
+        r: 14,
+        collected: false
+      });
+    }
+  }
+
+  obstacles.forEach(obs => {
+    obs.x -= currentSpeed;
+  });
+  obstacles = obstacles.filter(obs => obs.x > -100);
+
+  stars.forEach(s => {
+    s.x -= currentSpeed;
+  });
+  stars = stars.filter(s => s.x > -50 && !s.collected);
+
+  obstacles.forEach(obs => {
+    if (
+      plane.x + plane.w - 10 > obs.x &&
+      plane.x + 10 < obs.x + obs.w &&
+      plane.y + 6 > obs.y &&
+      plane.y + plane.h - 6 < obs.y + obs.h
+    ) {
+      gameOver();
+    }
+  });
+
+  stars.forEach(s => {
+    const dist = Math.hypot((plane.x + plane.w/2) - s.x, (plane.y + plane.h/2) - s.y);
+    if (dist < plane.w/2 + s.r) {
+      s.collected = true;
+      score += 150;
+      document.getElementById('score').textContent = score;
+    }
+  });
+
+  score += 1;
+  document.getElementById('score').textContent = Math.floor(score / 10);
+}
+
+function gameOver() {
+  gameState = 'GAMEOVER';
+  overlay.style.display = 'flex';
+  setTimeout(() => overlay.style.opacity = '1', 10);
+  document.querySelector('h1').textContent = 'Crash!';
+  startBtn.textContent = 'Fly Again';
+}
+
+function draw() {
+  ctx.clearRect(0, 0, width, height);
+
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.04)';
+  cloudsBg.forEach(c => {
+    ctx.beginPath();
+    ctx.roundRect(c.x, c.y, c.w, 40, 20);
+    ctx.fill();
+  });
+
+  particles.forEach(p => {
+    ctx.save();
+    ctx.globalAlpha = p.alpha;
+    ctx.fillStyle = '#00f2fe';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+
+  obstacles.forEach(obs => {
+    ctx.save();
+    ctx.fillStyle = '#2c3e50';
+    ctx.shadowColor = '#000000';
+    ctx.shadowBlur = 12;
+    ctx.beginPath();
+    ctx.roundRect(obs.x, obs.y, obs.w, obs.h, 16);
+    ctx.fill();
+
+    ctx.strokeStyle = '#f1c40f';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(obs.x + obs.w / 2, obs.y + 20);
+    ctx.lineTo(obs.x + obs.w / 2 - 6, obs.y + obs.h / 2);
+    ctx.lineTo(obs.x + obs.w / 2 + 6, obs.y + obs.h / 2 + 10);
+    ctx.stroke();
+    ctx.restore();
+  });
+
+  stars.forEach(s => {
+    if (s.collected) return;
+    ctx.save();
+    ctx.fillStyle = '#f39c12';
+    ctx.shadowColor = '#f1c40f';
+    ctx.shadowBlur = 15;
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  });
+
+  ctx.save();
+  ctx.translate(plane.x + plane.w / 2, plane.y + plane.h / 2);
+  let rotation = Math.min(Math.PI / 5, Math.max(-Math.PI / 5, plane.vy * 0.08));
+  ctx.rotate(rotation);
+
+  ctx.fillStyle = '#00f2fe';
+  ctx.shadowColor = '#00f2fe';
+  ctx.shadowBlur = 12;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, plane.w / 2, plane.h / 2, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.rect(-6, -14, 12, 28);
+  ctx.fill();
+
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.moveTo(-18, 0);
+  ctx.lineTo(-26, -10);
+  ctx.lineTo(-14, -4);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.fillStyle = 'rgba(255,255,255,0.7)';
+  ctx.fillRect(plane.w / 2 - 2, -10, 4, 20);
+
+  ctx.restore();
+
+  update();
+  requestAnimationFrame(draw);
+}
+
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>
